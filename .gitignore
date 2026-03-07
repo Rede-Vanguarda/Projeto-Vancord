@@ -1,0 +1,30 @@
+# Ambientes virtuais e pacotes Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+ENV/
+
+# Build e empacotadores (PyInstaller)
+build/
+dist/
+*.spec
+*.exe
+
+# Logs
+logs/
+*.log
+hibrida_*_crash.txt
+
+# Configurações do FFMPEG e Sistema Operacional
+.DS_Store
+Thumbs.db
+
+# Configurações sensíveis (Atenção redobrada)
+# No github, você deve criar um settings.example.json com dados falsos.
+# Nunca suba tokens reais pro Github!
+settings.json
+mic_config.json
+config.json
+schedules.json

@@ -1,0 +1,23 @@
+{
+    "bots": {
+        "Híbrida 1": {
+            "token": "SEU_TOKEN_DO_DISCORD_AQUI",
+            "nome_exibicao": "NET1",
+            "canal_voz_id": 123456789012345678,
+            "canal_texto_id": 123456789012345678,
+            "microfone": "Nome do Microfone do Windows (ex: Microfone HD-II)",
+            "ffmpeg_args": []
+        },
+        "Híbrida 4": {
+            "token": "SEU_TOKEN_DO_DISCORD_AQUI_2",
+            "nome_exibicao": "NET4",
+            "canal_voz_id": 123456789012345678,
+            "canal_texto_id": 123456789012345678,
+            "microfone": "NET4 (VB-Audio Voicemeeter VAIO)",
+            "ffmpeg_args": [
+                "-af",
+                "pan=stereo|c0=FR|c1=FR"
+            ]
+        }
+    }
+}
