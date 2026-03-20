@@ -6,6 +6,8 @@ import os
 import json
 from datetime import datetime
 import logging
+import asyncio
+import discord
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -13,7 +15,7 @@ from PyQt5.QtWidgets import (
     QDialog, QDialogButtonBox, QLineEdit, QListWidget, QMessageBox
 )
 from PyQt5.QtGui import QFont, QCursor
-from PyQt5.QtCore import Qt, QTimer, QTime
+from PyQt5.QtCore import Qt, QTimer, QTime, QThread, pyqtSignal
 
 # =============================================================================
 # CONFIGURAÇÃO PRINCIPAL DOS BOTS
@@ -160,6 +162,45 @@ class BotCard(QFrame):
             self.status_dot.set_error()
         self.status_label.setText(text)
 
+# =============================================================================
+# LISTENER DO DISCORD PARA N8N (COMANDOS)
+# =============================================================================
+class DiscordListenerThread(QThread):
+    command_received = pyqtSignal(str)
+
+    def __init__(self, token, channel_id=None):
+        super().__init__()
+        self.token = token
+        self.channel_id = channel_id
+        self.loop = None
+
+    def run(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
+        intents = discord.Intents.default()
+        intents.message_content = True
+        client = discord.Client(intents=intents)
+
+        @client.event
+        async def on_ready():
+            print(f"[DiscordListener] Conectado como {client.user} para escutar comandos N8N.")
+
+        @client.event
+        async def on_message(message):
+            if self.channel_id and message.channel.id != self.channel_id:
+                return
+
+            content = message.content.strip().lower()
+            if content.startswith("/"):
+                # Emite o sinal com o comando recebido, o PyQt garante processamento seguro na main thread
+                self.command_received.emit(content)
+
+        try:
+            client.run(self.token)
+        except Exception as e:
+            print(f"[DiscordListener] Erro ao inciar o listener do Discord: {e}")
+
 class BotManager(QWidget):
     SCHEDULE_FILE = os.path.join(os.path.dirname(__file__), "..", "config", "schedules.json")
 
@@ -190,6 +231,64 @@ class BotManager(QWidget):
         self.status_checker = QTimer(self)
         self.status_checker.timeout.connect(self.check_processes_status)
         self.status_checker.start(5000)
+        
+        # Inicializa o listener do Discord para comandos do N8N
+        self.discord_thread = None
+        self.init_discord_listener()
+
+    def init_discord_listener(self):
+        token = None
+        channel_id = None
+        settings_path = os.path.join(os.path.dirname(__file__), "..", "config", "settings.json")
+        
+        try:
+            with open(settings_path, "r", encoding='utf-8') as f:
+                data = json.load(f)
+                token = data.get("n8n_bot_token", "")
+                
+                # Pega o ID do canal para restringir escuta (usa padrão caso não exista campo próprio)
+                if "n8n_channel_id" in data:
+                    channel_id = data["n8n_channel_id"]
+                else:
+                    for b_data in data.get("bots", {}).values():
+                        if "canal_texto_id" in b_data:
+                            channel_id = b_data["canal_texto_id"]
+                            break
+        except Exception as e:
+            self.log(f"Erro ao ler settings.json para config do Discord: {e}")
+        
+        if token:
+            self.discord_thread = DiscordListenerThread(token, channel_id)
+            self.discord_thread.command_received.connect(self.handle_discord_command)
+            self.discord_thread.start()
+            self.log("Listener do Discord (N8N Bot) iniciado com sucesso.")
+        else:
+            self.log("Alerta: Nenhum token de N8N bot encontrado ('n8n_bot_token' vazio em settings.json). Listener inativo.")
+
+    def handle_discord_command(self, command):
+        self.log(f"Comando N8N recebido via Discord: {command}")
+        if command == "/reiniciarhib":
+            self.log("N8N: Reiniciando TODAS as híbridas...")
+            self.stop_all_bots()
+            QTimer.singleShot(3000, self.start_all_bots)
+        elif command == "/rhib1":
+            self.restart_specific_bot("Híbrida 1")
+        elif command == "/rhib2":
+            self.restart_specific_bot("Híbrida 2")
+        elif command == "/rhib3":
+            self.restart_specific_bot("Híbrida 3")
+        elif command == "/rhib4":
+            self.restart_specific_bot("Híbrida 4")
+        elif command == "/rhib5":
+            self.restart_specific_bot("Híbrida 5")
+        elif command == "/rpgm":
+            self.restart_specific_bot("PGM")
+
+    def restart_specific_bot(self, name):
+        if name in bots:
+            self.log(f"N8N: Reiniciando {name}...")
+            self.stop_bot(name)
+            QTimer.singleShot(3000, lambda n=name: self.start_bot(n))
 
     def check_processes_status(self):
         """Verifica se os processos dos bots caíram silenciosamente"""
